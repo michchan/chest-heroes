@@ -1,0 +1,414 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('myapp2:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+    var port = parseInt(val, 10);
+
+    if (isNaN(port)) {
+        // named pipe
+        return val;
+    }
+
+    if (port >= 0) {
+        // port number
+        return port;
+    }
+
+    return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+    if (error.syscall !== 'listen') {
+        throw error;
+    }
+
+    var bind = typeof port === 'string' ?
+        'Pipe ' + port :
+        'Port ' + port;
+
+    // handle specific listen errors with friendly messages
+    switch (error.code) {
+        case 'EACCES':
+            console.error(bind + ' requires elevated privileges');
+            process.exit(1);
+            break;
+        case 'EADDRINUSE':
+            console.error(bind + ' is already in use');
+            process.exit(1);
+            break;
+        default:
+            throw error;
+    }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+    var addr = server.address();
+    var bind = typeof addr === 'string' ?
+        'pipe ' + addr :
+        'port ' + addr.port;
+    debug('Listening on ' + bind);
+}
+
+/* start the socket.io */
+var io = require('socket.io').listen(server);
+
+//
+//	for public/bbio_circles_moving.html
+//	
+
+function OneCircle(_posx, _posy, _vx, _vy, _radius, _color, _id) {
+    this.pos_x = +_posx;
+    this.pos_y = +_posy;
+    this.vx = +_vx;
+    this.vy = +_vy;
+    this.color = _color;
+    this.radius = +_radius;
+    this.id = +_id;
+    return;
+}
+
+function GameState(_tick, _id) {
+    this.tick = _tick;
+    this.state = 0;
+    this.canvas_width = 800;
+    this.canvas_height = 800;
+    this.id = _id;
+    return;
+}
+
+var gamestate = new GameState(0, 0);
+var deltaTimeSec = 0.05; //	100ms
+var circle_id = 2;
+var circles = {};
+circles['0'] = new OneCircle(250, 100, 10, 10, 30, "#ff0000", "0");
+circles['1'] = new OneCircle(100, 50, 5, 5, 50, "#00ff00", "1");
+var circles_error_status = false;
+
+
+//
+//	for public/backbone_io_phonebook_test.html
+//
+
+function OneRecord(_name, _phone, _address, _id) {
+    this.name = _name;
+    this.phone = _phone;
+    this.address = _address;
+    this.id = _id;
+    return;
+}
+
+var phonebook = new Object();
+var id = 3;
+phonebook['0'] = new OneRecord("Clifford", "4738", "v902g", "0");
+phonebook['1'] = new OneRecord("Victor", "unknown", "v611", "1");
+phonebook['2'] = new OneRecord("General Office", "xxxx", "v810", "2");
+
+var status = false;
+
+
+//
+//	for public/movingblock.html
+//
+
+var lastPosition = { x: 0, y: 0 }; // whatever default data
+
+
+var socket_count = 0;
+io.sockets.on('connection', function(socket) {
+
+    //
+    //	for public/bbio_circles_moving.html
+    //
+
+    socket.on('bbio_circles_moving_gamestate:read', function(data, callback) {
+        data = gamestate;
+        callback(null, data);
+    });
+
+    var socket_id = socket_count++;
+
+    if (socket_id == 0) { //	only one timer is used to simulate movement of circles
+        //	Question: if the client who establishes this connection dies, will the "socket" object become invalid? Will the function below continue to broadcast data to other clients? 
+        setInterval(function() {
+                gamestate.tick += deltaTimeSec;
+                //	update position of all circles after deltaTimeSec
+                for (var id in circles) {
+                    var c = circles[id];
+
+                    c.pos_x += c.vx * deltaTimeSec;
+                    c.pos_y += c.vy * deltaTimeSec;
+
+                    var max_x = c.pos_x + c.radius;
+                    var min_x = c.pos_x - c.radius;
+                    var max_y = c.pos_y + c.radius;
+                    var min_y = c.pos_y - c.radius;
+
+                    if (max_x > gamestate.canvas_width) {
+                        c.pos_x = 2 * gamestate.canvas_width - max_x - c.radius;
+                        c.vx *= -1;
+                    }
+                    if (max_y > gamestate.canvas_height) {
+                        c.pos_y = 2 * gamestate.canvas_height - max_y - c.radius;
+                        c.vy *= -1;
+                    }
+                    if (min_x < 0) {
+                        c.pos_x = -min_x + c.radius;
+                        c.vx *= -1;
+                    }
+                    if (min_y < 0) {
+                        c.pos_y = -min_y + c.radius;
+                        c.vy *= -1;
+                    }
+
+                    //debug("socketio bbio_circles/"+c.id+":update"+JSON.stringify(c));
+                    socket.broadcast.emit("bbio_circles/" + c.id + ":update", c);
+                }
+
+                //debug("socketio bbio_circles_moving_gamestate:update"+JSON.stringify(gamestate));
+                socket.broadcast.emit("bbio_circles_moving_gamestate:update", gamestate);
+            },
+            deltaTimeSec * 1000);
+    }
+
+    socket.on('set_server_bbio_circles_error', function(data) {
+        circles_error_status = data.status;
+        socket.broadcast.emit('update_server_bbio_circles_error', data);
+    });
+
+    socket.on('bbio_circles:read', function(data, callback) {
+        debug("socketio bbio_circles:read data=" + JSON.stringify(data));
+
+        if (circles_error_status) { //	return error
+            debug("socketio bbio_circles:read - error");
+            callback({ error: 1, errmsg: "[bbio_circles] error reading models" });
+            return;
+        }
+
+        var obj = new Array();
+        for (var id in circles) {
+            obj.push(circles[id]);
+        }
+        debug("socketio bbio_circles:read - success, # of models returned=" + obj.length);
+        callback(null, obj);
+    });
+
+    socket.on('bbio_circles:create', function(data, callback) {
+        debug("socketio bbio_circles:create data=" + JSON.stringify(data));
+
+        if (circles_error_status) { //	return error
+            debug("socketio bbio_circles:create - error");
+            callback({ error: 1, errmsg: "[bbio_circles] error creating circle on server" });
+            return;
+        }
+
+        //	as validation has been performed on the client side, data receive are assumed to be validation
+        data.id = "" + circle_id++;
+        circles[data.id] = new OneCircle(data.pos_x, data.pos_y, data.vx, data.vy, data.radius, data.color, data.id);
+        debug("socketio bbio_circles:create - success, id=" + data.id);
+
+        socket.broadcast.emit("bbio_circles:create", circles[data.id]);
+
+        callback(null, circles[data.id]);
+    });
+
+    socket.on('bbio_circles:update', function(data, callback) {
+        debug("socketio bbio_circles:update data=" + JSON.stringify(data));
+
+        if (circles_error_status) { //	return error
+            debug("socketio bbio_circles:update - error, id=" + data.id);
+            callback({ error: 1, errmsg: "[bbio_circles] error in updating the item" });
+            return;
+        }
+
+        if (data.id in circles) {
+            var rec = circles[data.id];
+            for (var name in data) {
+                rec[name] = data[name];
+            }
+            debug("socketio bbio_circles:update - success, id=" + data.id);
+
+            socket.broadcast.emit("bbio_circles/" + data.id + ":update", circles[data.id]);
+
+            callback(null, rec);
+        } else {
+            debug("socketio bbio_circles:update - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+        }
+    });
+
+    socket.on('bbio_circles:delete', function(data, callback) {
+        debug("socketio bbio_circles:delete data=" + JSON.stringify(data));
+
+        if (circles_error_status) { //	return error
+            debug("socketio bbio_circles:delete - error, id=" + data.id);
+            callback({ error: 1, errmsg: "[bbio_circles] error in deleting the item" });
+            return;
+        }
+
+        if (data.id in circles) {
+            delete circles[data.id];
+            debug("socketio bbio_circles:delete - success, id=" + data.id);
+
+            socket.broadcast.emit("bbio_circles/" + data.id + ":delete", { id: data.id });
+
+            callback(null, {});
+        } else {
+            debug("socketio bbio_circles:delete - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+        }
+
+    });
+
+
+    //
+    //	for public/movingblock.html
+    //
+
+    socket.emit('update_position', lastPosition);
+    socket.on('receive_position', function(data) {
+        lastPosition = data;
+        socket.broadcast.emit('update_position', data); // send `data` to all other clients
+    });
+
+
+    //	
+    //	for public/backbone_io_phonebook_test.html	
+    //
+
+    socket.on('set_server_error', function(data) {
+        status = data.status;
+        socket.broadcast.emit('update_server_error', data);
+    });
+
+    socket.on('backbone_io_phonebook_test:create', function(data, callback) {
+        debug("socketio backbone_io_phonebook_test:create data=" + JSON.stringify(data));
+
+        if (status) { //	return error
+            debug("socketio backbone_io_phonebook_test:create - error");
+            callback({ error: 1, errmsg: "name should not be null" });
+            return;
+        }
+
+        if (data.name == "") {
+            debug("socketio backbone_io_phonebook_test:create - error");
+            callback({ error: 1, errmsg: "name should not be null" });
+        } else {
+            data.id = "" + id++;
+            phonebook[data.id] = new OneRecord(data.name, data.phone, data.address, data.id);
+            debug("socketio backbone_io_phonebook_test:create - success, id=" + data.id);
+
+            socket.broadcast.emit("backbone_io_phonebook_test:create", phonebook[data.id]);
+            //socket.broadcast.emit("testing",{status:"create"});
+
+            //	callback(null, JSON.stringify(phonebook[data.id]));
+            //	if convert model to JSON, the "model" in the success function will not be updated, while "response" has to be parsed. However, if reply the model, the success function performs correctly
+            callback(null, phonebook[data.id]);
+        }
+    });
+
+    socket.on('backbone_io_phonebook_test:read', function(data, callback) {
+        debug("socketio backbone_io_phonebook_test:read data=" + JSON.stringify(data));
+
+        if (status) { //	return error
+            debug("socketio backbone_io_phonebook_test:read - error");
+            callback({ error: 1, errmsg: "error reading models" });
+            return;
+        }
+
+        var obj = new Array();
+        for (var id in phonebook) {
+            obj.push(phonebook[id]);
+        }
+        debug("socketio backbone_io_phonebook_test:read - success, # of models returned=" + obj.length);
+        callback(null, obj);
+    });
+
+    socket.on('backbone_io_phonebook_test:update', function(data, callback) {
+        debug("socketio backbone_io_phonebook_test:update data=" + JSON.stringify(data));
+
+        if (status) { //	return error
+            debug("socketio backbone_io_phonebook_test:update - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+            return;
+        }
+
+        if (data.id in phonebook) {
+            var rec = phonebook[data.id];
+            for (var name in data) {
+                rec[name] = data[name];
+            }
+            debug("socketio backbone_io_phonebook_test:update - success, id=" + data.id);
+
+            socket.broadcast.emit("backbone_io_phonebook_test/" + data.id + ":update", phonebook[data.id]);
+
+            callback(null, rec);
+        } else {
+            debug("socketio backbone_io_phonebook_test:update - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+        }
+    });
+
+    socket.on('backbone_io_phonebook_test:delete', function(data, callback) {
+        debug("socketio backbone_io_phonebook_test:delete data=" + JSON.stringify(data));
+
+        if (status) { //	return error
+            debug("socketio backbone_io_phonebook_test:delete - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+            return;
+        }
+
+        if (data.id in phonebook) {
+            delete phonebook[data.id];
+            debug("socketio backbone_io_phonebook_test:delete - success, id=" + data.id);
+
+            socket.broadcast.emit("backbone_io_phonebook_test/" + data.id + ":delete", { id: data.id });
+
+            callback(null, {});
+        } else {
+            debug("socketio backbone_io_phonebook_test:delete - error, id=" + data.id);
+            callback({ error: 1, errmsg: "id not found" });
+        }
+
+    });
+
+});

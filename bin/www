@@ -1,0 +1,23 @@
+#!/usr/bin/env node
+
+var debug = require('debug')('myapp2');
+var app = require('../app');
+var express = require('express');
+var _app = express();
+var mainController = require('../controllers/mainController');
+// var reload = require('reload');
+
+app.set('port', process.env.PORT || 3000);
+
+var server = app.listen(app.get('port'), function() {
+    console.log('Express server listening on port ' + server.address().port);
+});
+
+// Reload code here 
+// reload(server, app);
+
+/* start the socket.io */
+var io = require('socket.io').listen(server);
+
+/* start game server-side main script */
+mainController(io);

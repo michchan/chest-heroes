@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+	A client-side application which makes use of Backbone.js and Backbone.iobind for synchronizing with a back-end server running on Node.js
+	This makes use of EaselJS for drawing graphics elements
+!-->
+
+<head>
+    <title>Chest Heroes</title>
+
+    <meta name="viewport" content="width=device-width; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <script src="/bower_components/jquery/dist/jquery.min.js"></script>
+    <script src="/bower_components/underscore/underscore.js"></script>
+    <script src="/bower_components/backbone/backbone.js"></script>
+    <script src="/bower_components/backbone.iobind/dist/backbone.iobind.min.js"></script>
+    <script src="./bower_components/backbone.iobind/dist/backbone.iosync.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/bower_components/easeljs/lib/easeljs-0.8.2.min.js"></script>
+    <script src="https://code.createjs.com/preloadjs-0.6.2.min.js"></script>
+    <script src="https://code.createjs.com/tweenjs-0.6.2.min.js"></script>
+    <script src="https://code.createjs.com/soundjs-0.6.2.min.js"></script>
+
+    <!-- game script -->
+
+    <script src="/javascripts/class.js"></script>
+    <script src="/javascripts/global.js"></script>
+    <script src="/javascripts/mvc.js"></script>
+    <script src="/javascripts/fn.js"></script>
+    <script src="/javascripts/main.js"></script>
+
+    <style>
+        body,
+        canvas {
+            margin: 0;
+            border: 0;
+        }
+    </style>
+
+</head>
+
+<body style="background-color: darkslategrey; text-align: center;">
+
+    <canvas id="canvas" width="1200" height="800">
+		alternate content
+	</canvas>
+
+</body>
+
+
+</html>
