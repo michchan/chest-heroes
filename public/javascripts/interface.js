@@ -65,11 +65,19 @@ function loadQueue(heroSpriteSheets, stageSpriteSheets) {
     loader.loadManifest(fileList);
 } // end fn loadQueue
 
+let loadedFileCount = 0
+
 function loadGfx(e) {
 
     let id = e.item.id;
     let img = e.result;
     console.log('load GFX name: ' + id);
+
+    // Increment count
+    loadedFileCount++
+    /* Update loader */
+    const loaderDiv = document.querySelector('#init_loader');
+    if (loaderDiv) loaderDiv.innerHTML = `<span>Loading...(${loadedFileCount})</span>`;
 
     /* generic */
     if (id === 'btn_previous') {}
@@ -219,6 +227,9 @@ function addTitleView() {
     console.log('@ Load Complete: add title view');
 
     if (!stage) {
+        /* Remove loader */
+        const loaderDiv = document.querySelector('#init_loader');
+        if (loaderDiv) loaderDiv.style.display = 'none';
 
         console.log('@ Stage and Ticker init');
         /* Link Canvas */
